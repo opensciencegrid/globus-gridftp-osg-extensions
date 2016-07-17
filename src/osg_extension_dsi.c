@@ -92,7 +92,43 @@ static void
 site_usage(globus_gfs_operation_t op,
            const char *           path)
 {
-    globus_gridftp_server_finished_command(op, GLOBUS_SUCCESS, "250 Ok\r\n");
+    GlobusGFSName(site_usage);
+    globus_result_t result = GLOBUS_SUCCESS;
+
+    const char *script_pathname = getenv("OSG_SITE_USAGE_SCRIPT");
+    if (!script_pathname)
+    {
+        result = GlobusGFSErrorGeneric("Site usage script not configured");
+        globus_gridftp_server_finished_command(op, result, "550 Server is not configured to provide site usage.\r\n");
+        return;
+    }
+    char cmd[256];
+    snprintf(cmd, 256, "%s %s", script_pathname, path);
+    cmd[255] = '\0';
+    FILE *fp = popen(cmd, "r");
+    if (fp == NULL) {
+        result = GlobusGFSErrorSystemError("usage script", errno);
+        globus_gridftp_server_finished_command(op, result, "550 Server failed to start usage query.\r\n");
+        return;
+    }
+    char output[1024];
+    while (fgets(output, 1024, fp) != NULL) {}
+
+    int status = pclose(fp);
+    if ((status == -1) || (status > 0))
+    {
+        if (status == -1) {result = GlobusGFSErrorSystemError("Usage script failed", errno);}
+        else {result = GlobusGFSErrorGeneric("Site usage script failed");}
+        globus_gridftp_server_finished_command(op, result, "550 Server usage query failed.\r\n");
+        return;
+    }
+    char *newline_char = strchr(output, '\n');
+    if (newline_char) {*newline_char = '\0';}
+
+    char final_output[1024];
+    snprintf(final_output, 1024, "250 USAGE %s\r\n", output);
+    final_output[1023] = '\0';
+    globus_gridftp_server_finished_command(op, result, final_output);
 }
 
 static void
