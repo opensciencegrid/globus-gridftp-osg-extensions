@@ -11,6 +11,8 @@ TIMESTAMP( OSG_EXTENSIONS_TIMESTAMP )
 
 find_package( GlobusCommon REQUIRED )
 find_package( GlobusGridftpServer REQUIRED )
+find_package( GlobusFtpControl )
+find_package( GlobusGssapiGsi )
 
 if( CMAKE_COMPILER_IS_GNUCXX )
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror" )
@@ -44,6 +46,15 @@ set_target_properties(
   VERSION   "0.0.1"
   SOVERSION "0"
   LINK_INTERFACE_LIBRARIES "" )
+
+if (GLOBUS_FTP_CONTROL_FOUND AND GLOBUS_GSSAPI_GSI_FOUND)
+
+include_directories( ${GLOBUS_FTP_CONTROL_INCLUDE_DIRS} )
+include_directories( ${GLOBUS_GSSAPI_GSI_INCLUDE_DIRS} )
+add_executable( space_usage_tester src/space_usage_tester.c )
+target_link_libraries( space_usage_tester ${GLOBUS_FTP_CONTROL_LIBRARY} ${GLOBUS_COMMON_LIBRARY} ${GLOBUS_GSSAPI_GSI_LIBRARY} )
+
+endif(GLOBUS_FTP_CONTROL_FOUND AND GLOBUS_GSSAPI_GSI_FOUND)
 
 CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in ${CMAKE_CURRENT_BINARY_DIR}/src/version.h)
 
