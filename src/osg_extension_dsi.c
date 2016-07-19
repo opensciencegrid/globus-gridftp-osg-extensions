@@ -69,8 +69,8 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
     globus_result_t result = globus_gridftp_server_add_command(op, "SITE USAGE",
                                  GLOBUS_GFS_OSG_CMD_SITE_USAGE,
                                  3,
-                                 3,
-                                 "SITE USAGE <sp> location: Get usage information for a location.",
+                                 5,
+                                 "SITE USAGE <sp> [TOKEN <sp> $name] <sp> $location: Get usage information for a location.",
                                  GLOBUS_FALSE,
                                  GFS_ACL_ACTION_LOOKUP);
 
@@ -90,10 +90,42 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
 
 static void
 site_usage(globus_gfs_operation_t op,
-           const char *           path)
+           globus_gfs_command_info_t *cmd_info)
 {
     GlobusGFSName(site_usage);
-    globus_result_t result = GLOBUS_SUCCESS;
+
+    int argc = 0;
+    char **argv;
+
+    globus_result_t result = globus_gridftp_server_query_op_info(
+        op,
+        cmd_info->op_info,
+        GLOBUS_GFS_OP_INFO_CMD_ARGS,
+        &argv,
+        &argc
+        );
+    if (result != GLOBUS_SUCCESS)
+    {
+        result = GlobusGFSErrorGeneric("Incorrect invocation of SITE USAGE command");
+        globus_gridftp_server_finished_command(op, result, "550 Incorrect invocation of SITE USAGE.\r\n");
+        return;
+    }
+    if ((argc != 3) && (argc != 5))
+    {
+        result = GlobusGFSErrorGeneric("Incorrect number of arguments to SITE USAGE command");
+        globus_gridftp_server_finished_command(op, result, "550 Incorrect number of arguments to SITE USAGE command.\r\n");
+        return;
+    }
+    const char *token_name = "default";
+    if ((argc == 5) && strcasecmp("TOKEN", argv[2]))
+    {
+        result = GlobusGFSErrorGeneric("Incorrect format for SITE USAGE command");
+        globus_gridftp_server_finished_command(op, result, "550 Expected format: SITE USAGE [TOKEN name] path.\r\n");
+        return;
+    }
+    if (argc == 5) {
+        token_name = argv[3];
+    }
 
     const char *script_pathname = getenv("OSG_SITE_USAGE_SCRIPT");
     if (!script_pathname)
@@ -103,7 +135,7 @@ site_usage(globus_gfs_operation_t op,
         return;
     }
     char cmd[256];
-    snprintf(cmd, 256, "%s %s", script_pathname, path);
+    snprintf(cmd, 256, "%s %s %s", script_pathname, token_name, cmd_info->pathname);
     cmd[255] = '\0';
     FILE *fp = popen(cmd, "r");
     if (fp == NULL) {
@@ -125,8 +157,18 @@ site_usage(globus_gfs_operation_t op,
     char *newline_char = strchr(output, '\n');
     if (newline_char) {*newline_char = '\0';}
 
+    long long usage, free, total;
+    int output_count = sscanf(output, "%lld %lld %lld", &usage, &free, &total);
+    if (output_count < 2)
+    {
+        result = GlobusGFSErrorGeneric("Invalid output from site usage script");
+        globus_gridftp_server_finished_command(op, result, "550 Invalid output from site usage script.\r\n");
+        return;
+    }
+    if (output_count == 2) {total = usage + free;}
+
     char final_output[1024];
-    snprintf(final_output, 1024, "250 USAGE %s\r\n", output);
+    snprintf(final_output, 1024, "250 USAGE %lld FREE %lld TOTAL %lld\r\n", usage, free, total);
     final_output[1023] = '\0';
     globus_gridftp_server_finished_command(op, result, final_output);
 }
@@ -140,7 +182,7 @@ osg_command(
     switch (cmd_info->command)
     {
     case GLOBUS_GFS_OSG_CMD_SITE_USAGE:
-        site_usage(op, cmd_info->pathname);
+        site_usage(op, cmd_info);
         return;
     default:
         // Anything not explicitly OSG-centric is passed to the
