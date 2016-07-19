@@ -202,12 +202,18 @@ osg_activate(void)
 
     memset(&osg_dsi_iface, '\0', sizeof(globus_gfs_storage_iface_t));
 
+    char * dsi_name = getenv("OSG_EXTENSIONS_OVERRIDE_DSI");
+    dsi_name = dsi_name ? dsi_name : "file";
+
     // Code adapted from globus_i_gfs_data.c in Globus Toolkit.
     void *new_dsi = (globus_gfs_storage_iface_t *) globus_extension_lookup(
-        &osg_dsi_handle, GLOBUS_GFS_DSI_REGISTRY, "file");
+        &osg_dsi_handle, GLOBUS_GFS_DSI_REGISTRY, dsi_name);
     if (new_dsi == NULL)
     {
-        result = globus_extension_activate("globus_gridftp_server_file");
+        char module_name[1024];
+        snprintf(module_name, 1024, "globus_gridftp_server_%s", dsi_name);
+        module_name[1023] = '\0';
+        result = globus_extension_activate(module_name);
         if (result != GLOBUS_SUCCESS)
         {
             result = GlobusGFSErrorWrapFailed("DSI activation", result);
@@ -215,11 +221,11 @@ osg_activate(void)
         }
     }
     new_dsi = (globus_gfs_storage_iface_t *) globus_extension_lookup(
-        &osg_dsi_handle, GLOBUS_GFS_DSI_REGISTRY, "file");
+        &osg_dsi_handle, GLOBUS_GFS_DSI_REGISTRY, dsi_name);
     if(new_dsi == NULL)
     {
         GlobusGFSErrorGenericStr(result,
-            ("DSI 'file' is not available in the module."));
+            ("DSI '%s' is not available in the module.", dsi_name));
         return result;
     }
 

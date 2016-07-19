@@ -15,6 +15,13 @@ load_dsi_module osg
 
 This will cause the extension module to be used; this module layers on top of the `file` module.
 
+If you do not use the built-in `file` module, you may override a different one using the following:
+
+```
+$OSG_EXTENSIONS_OVERRIDE_DSI foo
+```
+where `foo` is the DSI module you currently use.
+
 ## Site Usage
 The site usage extension allows the GridFTP server to provide information about usage of space in the server.  The sysadmin must provide a script that, given a space name, returns the number of bytes used and free space available.
 
