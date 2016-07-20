@@ -2,6 +2,10 @@
 #include "globus_gridftp_server.h"
 #include "version.h"
 
+#ifdef VOMS_FOUND
+#include "voms_apic.h"
+#endif  // VOMS_FOUND
+
 #include <string.h>
 
 static int osg_activate(void);
@@ -84,6 +88,66 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
                                                  NULL);
         return;
     }
+
+#ifdef VOMS_FOUND
+
+    struct vomsdata *vdata = VOMS_Init(NULL, NULL);
+    if (vdata)
+    {
+        int error;
+        if (!VOMS_RetrieveFromCred(session->del_cred, RECURSE_CHAIN, vdata, &error))
+        {
+            globus_gfs_log_message(GLOBUS_GFS_LOG_TRANSFER, "No VOMS info in credential.\n");
+        }
+        else
+        {
+            struct voms *vext;
+            int idx;
+            for (idx = 0; vdata->data[idx] != NULL; idx++)
+            {
+                char msg[1024];
+                char *pos = msg;
+                int char_remaining = 1022;
+                vext = vdata->data[idx];
+                int this_round;
+                if ((char_remaining > 0) && vext->voname)
+                {
+                    this_round = snprintf(pos, char_remaining, "VO %s ", vext->voname);
+                    pos += this_round;
+                    char_remaining -= this_round;
+                }
+                char *fqan;
+                int count = 0;
+                int idx2 = 0;
+                for (idx2 = 0; vext->fqan[idx2] != NULL; idx2++)
+                {
+                    fqan = vext->fqan[idx2];
+                    if (char_remaining > 0)
+                    {
+                        count ++;
+                        this_round = snprintf(pos, char_remaining, "%s,", fqan);
+                        pos += this_round;
+                        char_remaining -= this_round;
+                    }
+                }
+                if (count && char_remaining >= 0) {pos--;}
+                if (char_remaining >= 0)
+                {
+                    *pos = '\n';
+                    *(pos+1) = '\0';
+                }
+                else
+                {
+                    msg[1023] = '\0';
+                    msg[1022] = '\n';
+                }
+                globus_gfs_log_message(GLOBUS_GFS_LOG_TRANSFER, msg);
+            }
+        }
+        VOMS_Destroy(vdata);
+    }
+
+#endif  // VOMS_FOUND
 
     original_init_function(op, session);
 }

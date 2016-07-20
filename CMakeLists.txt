@@ -13,6 +13,7 @@ find_package( GlobusCommon REQUIRED )
 find_package( GlobusGridftpServer REQUIRED )
 find_package( GlobusFtpControl )
 find_package( GlobusGssapiGsi )
+find_package( Voms )
 
 if( CMAKE_COMPILER_IS_GNUCXX )
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror" )
@@ -29,8 +30,13 @@ include_directories( ${GLOBUS_GRIDFTP_SERVER_INCLUDE_DIRS} )
 
 include_directories( "${PROJECT_SOURCE_DIR}" )
 
+if (VOMS_FOUND)
+add_definitions(-DVOMS_FOUND)
+include_directories( ${VOMS_INCLUDE_DIRS} )
+endif(VOMS_FOUND)
+
 add_library( globus_gridftp_server_osg MODULE src/osg_extension_dsi.c )
-target_link_libraries( globus_gridftp_server_osg ${GLOBUS_COMMON_LIBRARY} ${GLOBUS_GRIDFTP_SERVER_LIBRARY} )
+target_link_libraries( globus_gridftp_server_osg ${GLOBUS_COMMON_LIBRARY} ${GLOBUS_GRIDFTP_SERVER_LIBRARY} ${VOMS_LIBRARY} )
 
 if (NOT DEFINED CMAKE_INSTALL_LIBDIR)
   SET(CMAKE_INSTALL_LIBDIR "lib64")
