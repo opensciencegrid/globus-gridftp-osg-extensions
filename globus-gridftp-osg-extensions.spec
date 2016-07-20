@@ -1,5 +1,5 @@
 Name:		globus-gridftp-osg-extensions
-Version:	0.2
+Version:	0.3
 Release:	1%{?dist}
 Summary:	OSG extensions for the Globus GridFTP server
 
@@ -37,6 +37,9 @@ make install DESTDIR=%{buildroot}
 %{_libdir}/libglobus_gridftp_server_osg.so*
 
 %changelog
+* Wed Jul 20 2016 Brian Bockelman <bbockelm@cse.unl.edu> - 0.3-1
+- Log VOMS information.
+
 * Tue Jul 19 2016 Brian Bockelman <bbockelm@cse.unl.edu> - 0.2-1
 - Initial packaging of extensions.
 
