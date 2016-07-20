@@ -65,5 +65,32 @@ If not specified, the value of `$token` is `default`.  The response has the foll
 250 USAGE <sp> $val FREE $val2 TOTAL $val3
 ```
 
-where `$val`, `$val2`, and `$val3 are integers.  The successful response code is 250; any other response code indicates an error.
+where `$val`, `$val2`, and `$val3` are integers.  The successful response code is 250; any other response code indicates an error.
 
+## Logging changes
+
+The extensions DSI will automatically add extra information about any present VOMS extension to the `TRANSFER` log level.
+
+For proxies without VOMS extensions, this line is expected:
+
+```
+[1582694] Tue Jul 19 22:02:05 2016 :: No VOMS info in credential.
+```
+
+For a single VOMS extensions:
+
+```
+[1582658] Tue Jul 19 22:01:04 2016 :: VO osg /osg/Role=NULL/Capability=NULL,/osg/ligo/Role=NULL/Capability=NULL
+```
+
+And, for multiple VOMS extensions:
+
+```
+[1582658] Tue Jul 19 22:01:04 2016 :: VO osg /osg/Role=NULL/Capability=NULL,/osg/ligo/Role=NULL/Capability=NULL
+[1582658] Tue Jul 19 22:01:04 2016 :: VO cms /cms/Role=NULL/Capability=NULL,/cms/integration/Role=NULL/Capability=NULL,/cms/uscms/Role=NULL/Capability=NULL
+```
+
+To see the transfer-level logging, we recommend the following log statement in `gridftp.conf`:
+```
+log_level ERROR,WARN,INFO,TRANSFER
+```
