@@ -15,6 +15,7 @@ BuildRequires:  globus-ftp-control-devel
 BuildRequires:  globus-gridftp-server-devel
 BuildRequires:  globus-gssapi-gsi-devel
 BuildRequires:  cmake
+BuildRequires:  voms-devel
 
 %description
 %{summary}
