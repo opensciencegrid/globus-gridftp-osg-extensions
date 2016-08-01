@@ -16,7 +16,7 @@ echo "exclude=mirror.beyondhosting.net" >> /etc/yum/pluginconf.d/fastestmirror.c
 
 yum -y install yum-plugin-priorities
 rpm -Uvh https://repo.grid.iu.edu/osg/3.3/osg-3.3-el${OS_VERSION}-release-latest.rpm
-yum -y install rpm-build
+yum -y install rpm-build git
 
 # Prepare the RPM environment
 mkdir -p /tmp/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -26,7 +26,7 @@ cat >> /etc/rpm/macros.dist << EOF
 EOF
 
 cp /globus-gridftp-osg-extensions/globus-gridftp-osg-extensions.spec /tmp/rpmbuild/SPECS
-package_version=`grep Version globus-gridftp-osg-extensions/config/globus-gridftp-osg-extensions.spec | awk '{print $2}'`
+package_version=`grep Version globus-gridftp-osg-extensions/globus-gridftp-osg-extensions.spec | awk '{print $2}'`
 pushd globus-gridftp-osg-extensions
 git archive --format=tar --prefix=globus-gridftp-osg-extensions-${package_version}/ HEAD  | gzip >/tmp/rpmbuild/SOURCES/globus-gridftp-osg-extensions-${package_version}.tar.gz
 popd
