@@ -33,7 +33,7 @@ popd
 
 # Build a temporary SRPM with all the SRPM deps missing; this will allow us to determine the actual yum dependencies.
 rpmbuild -bs --nodeps --define '_topdir /tmp/rpmbuild' -ba /tmp/rpmbuild/SPECS/globus-gridftp-osg-extensions.spec
-yum-builddep /tmp/rpmbuild/SRPMS/globus-gridftp-osg-extensions*.src.rpm
+yum-builddep -y /tmp/rpmbuild/SRPMS/globus-gridftp-osg-extensions*.src.rpm
 # Build the RPM
 rpmbuild --nodeps --define '_topdir /tmp/rpmbuild' -ba /tmp/rpmbuild/SPECS/globus-gridftp-osg-extensions.spec
 
