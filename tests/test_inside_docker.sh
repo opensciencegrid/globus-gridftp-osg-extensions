@@ -83,6 +83,7 @@ log_level ERROR,WARN,INFO,TRANSFER
 log_single /var/log/gridftp-auth.log
 log_transfer /var/log/gridftp.log
 EOF
+cat /etc/gridftp.conf
 
 globus-gridftp-server -S
 
