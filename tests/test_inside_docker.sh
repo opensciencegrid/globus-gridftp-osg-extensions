@@ -15,7 +15,7 @@ rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-${OS_VERSION}
 echo "exclude=mirror.beyondhosting.net" >> /etc/yum/pluginconf.d/fastestmirror.conf
 
 rpm -Uvh https://repo.grid.iu.edu/osg/3.3/osg-3.3-el${OS_VERSION}-release-latest.rpm
-yum -y install rpm-build git yum-utils gcc make yum-plugin-priorities openssl
+yum -y install rpm-build git yum-utils gcc make yum-plugin-priorities openssl sudo
 
 # Prepare the RPM environment
 mkdir -p /tmp/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -70,7 +70,7 @@ globus-gridftp-server -S
 
 dd if=/dev/zero of=/tmp/test.source bs=1024 count=1024
 
-runuser -u nobody globus-url-copy -dbg gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
+sudo -u nobody globus-url-copy -dbg gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
 
 cat /var/log/gridftp-auth.log
 
