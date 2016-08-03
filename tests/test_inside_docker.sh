@@ -85,6 +85,7 @@ log_transfer /var/log/gridftp.log
 EOF
 cat /etc/gridftp.conf
 
+export OSG_SITE_USAGE_SCRIPT=/globus-gridftp-osg-extensions/site_usage.sh
 globus-gridftp-server -S
 
 dd if=/dev/zero of=/tmp/test.source bs=1024 count=1024
