@@ -17,6 +17,10 @@ echo "exclude=mirror.beyondhosting.net" >> /etc/yum/pluginconf.d/fastestmirror.c
 rpm -Uvh https://repo.grid.iu.edu/osg/3.3/osg-3.3-el${OS_VERSION}-release-latest.rpm
 yum -y install rpm-build git yum-utils gcc make yum-plugin-priorities
 
+# Build the project; drops space_usage_tester into place.
+cmake .
+make
+
 # Prepare the RPM environment
 mkdir -p /tmp/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cat >> /etc/rpm/macros.dist << EOF
@@ -44,7 +48,7 @@ yum localinstall -y /tmp/rpmbuild/RPMS/noarch/globus-gridftp-osg-extensions-${pa
 yum -y install voms-clients-cpp globus-gass-copy-progs globus-gridftp-server-progs
 
 # Ok, generate the necessary GSI infrastructure
-pushd tests
+pushd /globus-gridftp-osg-extensions/tests
 ./ca-generate-certs $HOSTNAME
 popd
 
@@ -64,4 +68,8 @@ dd if=/dev/zero of=/tmp/test.source bs=1024 count=1024
 globus-url-copy gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
 
 cat /var/log/gridftp-auth.log
+
+pushd /globus-gridftp-osg-extensions
+./space_usage_tester $HOSTNAME foo | grep -q 'Response: 250 USAGE 4068 FREE 1234 TOTAL 87263'
+popd
 
