@@ -101,7 +101,7 @@ cp hostkey.pem /etc/grid-security/hostkey.pem
 cp OSG-Test-CA.pem /etc/grid-security/certificates/OSG-Test-CA.pem
 cp OSG-Test-CA.r0 /etc/grid-security/certificates/OSG-Test-CA.r0
 cp OSG-Test-CA.signing_policy /etc/grid-security/certificates/OSG-Test-CA.signing_policy
-hash=`openssl x509 -in $TEST600_TESTCA -noout -hash`
+hash=`openssl x509 -in OSG-Test-CA.pem -noout -hash`
 ln -sf /etc/grid-security/certificates/OSG-Test-CA.pem /etc/grid-security/certificates/${hash}.0
 ln -sf /etc/grid-security/certificates/OSG-Test-CA.r0 /etc/grid-security/certificates/${hash}.r0
 ln -sf /etc/grid-security/certificates/OSG-Test-CA.signing_policy /etc/grid-security/certificates/${hash}.signing_policy

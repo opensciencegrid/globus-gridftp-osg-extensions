@@ -15,7 +15,7 @@ rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-${OS_VERSION}
 echo "exclude=mirror.beyondhosting.net" >> /etc/yum/pluginconf.d/fastestmirror.conf
 
 rpm -Uvh https://repo.grid.iu.edu/osg/3.3/osg-3.3-el${OS_VERSION}-release-latest.rpm
-yum -y install rpm-build git yum-utils gcc make yum-plugin-priorities
+yum -y install rpm-build git yum-utils gcc make yum-plugin-priorities openssl
 
 # Prepare the RPM environment
 mkdir -p /tmp/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -52,12 +52,12 @@ yum -y install voms-clients-cpp globus-gass-copy-progs globus-gridftp-server-pro
 # Ok, generate the necessary GSI infrastructure
 pushd /globus-gridftp-osg-extensions/tests
 ./ca-generate-certs $HOSTNAME
-popd
 
 voms-proxy-fake -certdir /etc/grid-security/certificates \
   -cert usercert.pem -key userkey.pem -out /tmp/x509up_u`id -u` -rfc \
   -hostcert hostcert.pem -hostkey hostkey.pem -fqan /osgtest/Role=NULL
   -voms osgtest -uri $HOSTNAME:15000
+popd
 
 voms-proxy-info -all
 
