@@ -91,8 +91,8 @@ dd if=/dev/zero of=/tmp/test.source bs=1024 count=1024
 sudo -u nobody globus-url-copy -dbg gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
 
 cat /var/log/gridftp-auth.log
+grep -q "VO osgtest /osgtest/Role=NULL" /var/log/gridftp-auth.log
 
-pushd /globus-gridftp-osg-extensions
-./space_usage_tester $HOSTNAME foo | grep -q "Response: 250 USAGE $(du -s /tmp | awk '{print $1;}') FREE 1234 TOTAL 87263"
-popd
+sudo -u nobody /globus-gridftp-osg-extensions/space_usage_tester $HOSTNAME foo
+sudo -u nobody /globus-gridftp-osg-extensions/space_usage_tester $HOSTNAME foo | grep -q "Response: 250 USAGE $(du -s /tmp | awk '{print $1;}') FREE 1234 TOTAL 87263"
 
