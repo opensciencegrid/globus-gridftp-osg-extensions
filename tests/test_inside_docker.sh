@@ -46,7 +46,7 @@ popd
 # Fix the lock file error on EL7.  /var/lock is a symlink to /var/run/lock
 mkdir -p /var/run/lock
 
-yum localinstall -y /tmp/rpmbuild/RPMS/noarch/globus-gridftp-osg-extensions-${package_version}*
+yum localinstall -y /tmp/rpmbuild/RPMS/x86_64/globus-gridftp-osg-extensions-${package_version}*
 yum -y install voms-clients-cpp globus-gass-copy-progs globus-gridftp-server-progs
 
 # Ok, generate the necessary GSI infrastructure
