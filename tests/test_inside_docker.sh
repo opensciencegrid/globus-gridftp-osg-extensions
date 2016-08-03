@@ -55,7 +55,7 @@ pushd /globus-gridftp-osg-extensions/tests
 
 voms-proxy-fake -certdir /etc/grid-security/certificates \
   -cert usercert.pem -key userkey.pem -out /tmp/x509up_u`id -u` -rfc \
-  -hostcert hostcert.pem -hostkey hostkey.pem -fqan /osgtest/Role=NULL
+  -hostcert hostcert.pem -hostkey hostkey.pem -fqan /osgtest/Role=NULL \
   -voms osgtest -uri $HOSTNAME:15000
 popd
 
