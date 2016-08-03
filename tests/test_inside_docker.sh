@@ -14,9 +14,8 @@ rpm -Uvh https://dl.fedoraproject.org/pub/epel/epel-release-latest-${OS_VERSION}
 # Broken mirror?
 echo "exclude=mirror.beyondhosting.net" >> /etc/yum/pluginconf.d/fastestmirror.conf
 
-yum -y install yum-plugin-priorities
 rpm -Uvh https://repo.grid.iu.edu/osg/3.3/osg-3.3-el${OS_VERSION}-release-latest.rpm
-yum -y install rpm-build git yum-utils gcc make
+yum -y install rpm-build git yum-utils gcc make yum-plugin-priorities
 
 # Prepare the RPM environment
 mkdir -p /tmp/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
@@ -42,4 +41,27 @@ rpmbuild --nodeps --define '_topdir /tmp/rpmbuild' -ba /tmp/rpmbuild/SPECS/globu
 mkdir -p /var/run/lock
 
 yum localinstall -y /tmp/rpmbuild/RPMS/noarch/globus-gridftp-osg-extensions-${package_version}*
+yum -y install voms-clients-cpp globus-gass-copy-progs globus-gridftp-server-progs
+
+# Ok, generate the necessary GSI infrastructure
+pushd tests
+./ca-generate-certs $HOSTNAME
+popd
+
+voms-proxy-fake -certdir /etc/grid-security/certificates \
+  -cert usercert.pem -key userkey.pem -out /tmp/x509up_u`id -u` -rfc \
+  -hostcert hostcert.pem -hostkey hostkey.pem -fqan /osgtest/Role=NULL
+  -voms osgtest -uri $HOSTNAME:15000
+
+voms-proxy-info -all
+
+echo "\"/DC=org/DC=Open Science Grid/O=OSG Test/OU=Users/CN=John Q Public\" nobody" > /etc/grid-security/grid-mapfile
+
+globus-gridftp-server -S
+
+dd if=/dev/zero of=/tmp/test.source bs=1024 count=1024
+
+globus-url-copy gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
+
+cat /var/log/gridftp-auth.log
 
