@@ -66,6 +66,24 @@ voms-proxy-info -all
 
 echo "\"/DC=org/DC=Open Science Grid/O=OSG Test/OU=Users/CN=John Q Public\" nobody" > /etc/grid-security/grid-mapfile
 
+cat > /globus-gridftp-osg-extensions/site_usage.sh << EOF
+#!/bin/sh
+usage=\$(du -s /tmp | awk '{print \$1;}')
+echo "\$usage 1234 87263"
+EOF
+chmod +x /globus-gridftp-osg-extensions/site_usage.sh
+
+cat > /etc/gridftp.conf << EOF
+port 2811
+
+load_dsi_module osg
+\$OSG_SITE_USAGE_SCRIPT /globus-gridftp-osg-extensions/site_usage.sh
+
+log_level ERROR,WARN,INFO,TRANSFER
+log_single /var/log/gridftp-auth.log
+log_transfer /var/log/gridftp.log
+EOF
+
 globus-gridftp-server -S
 
 dd if=/dev/zero of=/tmp/test.source bs=1024 count=1024
@@ -75,6 +93,6 @@ sudo -u nobody globus-url-copy -dbg gsiftp://$HOSTNAME//tmp/test.source /tmp/tes
 cat /var/log/gridftp-auth.log
 
 pushd /globus-gridftp-osg-extensions
-./space_usage_tester $HOSTNAME foo | grep -q 'Response: 250 USAGE 4068 FREE 1234 TOTAL 87263'
+./space_usage_tester $HOSTNAME foo | grep -q "Response: 250 USAGE $(du -s /tmp | awk '{print $1;}') FREE 1234 TOTAL 87263"
 popd
 
