@@ -17,10 +17,6 @@ echo "exclude=mirror.beyondhosting.net" >> /etc/yum/pluginconf.d/fastestmirror.c
 rpm -Uvh https://repo.grid.iu.edu/osg/3.3/osg-3.3-el${OS_VERSION}-release-latest.rpm
 yum -y install rpm-build git yum-utils gcc make yum-plugin-priorities
 
-# Build the project; drops space_usage_tester into place.
-cmake .
-make
-
 # Prepare the RPM environment
 mkdir -p /tmp/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 cat >> /etc/rpm/macros.dist << EOF
@@ -39,6 +35,12 @@ rpmbuild -bs --nodeps --define '_topdir /tmp/rpmbuild' -ba /tmp/rpmbuild/SPECS/g
 yum-builddep -y /tmp/rpmbuild/SRPMS/globus-gridftp-osg-extensions*.src.rpm
 # Build the RPM
 rpmbuild --nodeps --define '_topdir /tmp/rpmbuild' -ba /tmp/rpmbuild/SPECS/globus-gridftp-osg-extensions.spec
+
+# Build the project; drops space_usage_tester into place.
+pushd /globus-gridftp-osg-extensions
+cmake .
+make
+popd
 
 # After building the RPM, try to install it
 # Fix the lock file error on EL7.  /var/lock is a symlink to /var/run/lock
