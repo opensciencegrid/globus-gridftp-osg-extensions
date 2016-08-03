@@ -67,7 +67,8 @@ globus-gridftp-server -S
 
 dd if=/dev/zero of=/tmp/test.source bs=1024 count=1024
 
-globus-url-copy gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
+export X509_USER_PROXY=/tmp/x509up_u`id -u`
+globus-url-copy -dbg gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
 
 cat /var/log/gridftp-auth.log
 
