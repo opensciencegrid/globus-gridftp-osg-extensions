@@ -59,6 +59,9 @@ voms-proxy-fake -certdir /etc/grid-security/certificates \
   -voms osgtest -uri $HOSTNAME:15000
 popd
 
+cp /tmp/x509up_u`id -u` /tmp/x509up_u`id -u nobody`
+chown nobody: /tmp/x509up_u`id -u nobody`
+
 voms-proxy-info -all
 
 echo "\"/DC=org/DC=Open Science Grid/O=OSG Test/OU=Users/CN=John Q Public\" nobody" > /etc/grid-security/grid-mapfile
@@ -67,8 +70,7 @@ globus-gridftp-server -S
 
 dd if=/dev/zero of=/tmp/test.source bs=1024 count=1024
 
-export X509_USER_PROXY=/tmp/x509up_u`id -u`
-globus-url-copy -dbg gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
+runuser -u nobody globus-url-copy -dbg gsiftp://$HOSTNAME//tmp/test.source /tmp/test.result
 
 cat /var/log/gridftp-auth.log
 
