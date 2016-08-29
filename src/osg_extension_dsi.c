@@ -298,6 +298,9 @@ osg_activate(void)
     original_init_function = osg_dsi_iface.init_func;
     osg_dsi_iface.command_func = osg_command;
     osg_dsi_iface.init_func = osg_extensions_init;
+    if (getenv("OSG_REQUIRES_ORDERED_DATA")) {
+        osg_dsi_iface.descriptor |= GLOBUS_GFS_DSI_DESCRIPTOR_REQUIRES_ORDERED_DATA;
+    }
 
     globus_extension_registry_add(
         GLOBUS_GFS_DSI_REGISTRY,
