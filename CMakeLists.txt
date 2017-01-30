@@ -19,7 +19,7 @@ if( CMAKE_COMPILER_IS_GNUCC )
   set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror" )
 endif()
 
-SET( CMAKE_MODULE_LINKER_FLAGS "-Wl,--no-undefined")
+SET( CMAKE_MODULE_LINKER_FLAGS "-Wl,--no-undefined -lrt")
 
 include_directories( ${GLOBUS_COMMON_INCLUDE_DIRS} )
 include_directories( ${GLOBUS_GRIDFTP_SERVER_INCLUDE_DIRS} )

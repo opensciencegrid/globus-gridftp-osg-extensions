@@ -1,6 +1,11 @@
 
 #include "globus_gridftp_server.h"
 #include "version.h"
+//#include "gridftp_hdfs.h"
+#include "gridftp_hdfs_error.h"
+
+#include <hdfs.h>
+#include <openssl/md5.h>
 
 #ifdef VOMS_FOUND
 #include "voms_apic.h"
@@ -31,6 +36,63 @@ do                                                                     \
                                                                        \
 } while(0)
 
+// from gridftp_hdfs.h
+typedef struct globus_l_gfs_hdfs_handle_s
+{
+    char *                              pathname;
+    hdfsFS                              fs;
+    hdfsFile                            fd;
+    globus_off_t                        file_size; // size of the file for reads
+    globus_size_t                       block_size;
+    globus_off_t                        op_length; // Length of the requested read/write size
+    globus_off_t                        offset;
+    unsigned int                        done;
+    globus_result_t                     done_status; // The status of the finished transfer.
+    globus_bool_t                       sent_finish; // Whether or not we have sent the client an abort.
+    globus_gfs_operation_t              op;
+    globus_byte_t *                     buffer;
+    globus_off_t *                      offsets; // The offset of each buffer.
+    globus_size_t *                     nbytes; // The number of bytes in each buffer.
+    short *                             used;
+    int                                 optimal_count;
+    unsigned int                        max_buffer_count;
+    unsigned int                        max_file_buffer_count;
+    unsigned int                        buffer_count; // Number of buffers we currently maintain in memory waiting to be written to HDFS.
+    unsigned int                        outstanding;
+    globus_mutex_t *                    mutex;
+    int                                 port;
+    char *                              host;
+    char *                              mount_point;
+    unsigned int                        mount_point_len;
+    unsigned int                        replicas;
+    char *                              username;
+    char *                              tmp_file_pattern;
+    int                                 tmpfilefd;
+    globus_bool_t                       using_file_buffer;
+    char *                              syslog_host; // The host to send syslog message to.
+    char *                              remote_host; // The remote host connecting to us.
+    char *                              local_host;  // Our local hostname.
+    char *                              syslog_msg;  // Message printed out to syslog.
+    unsigned int                        io_block_size;
+    unsigned long long                  io_count;
+    globus_bool_t                       eof;
+
+    // Checksumming support
+    char *                              expected_cksm;
+    const char *                        cksm_root;
+    unsigned char                       cksm_types;
+    MD5_CTX                             md5;
+    char                                md5_output[MD5_DIGEST_LENGTH];
+    char                                md5_output_human[MD5_DIGEST_LENGTH*2+1];
+    uint32_t                            adler32;
+    char                                adler32_human[2*sizeof(uint32_t)+1];
+    uint32_t                            crc32;
+    uint32_t                            cksum;
+} globus_l_gfs_hdfs_handle_t;
+typedef globus_l_gfs_hdfs_handle_t hdfs_handle_t;
+
+globus_result_t
+check_connection_limits(const hdfs_handle_t *hdfs_handle, int user_transfer_limit, int transfer_limit);
 
 static globus_version_t osg_local_version =
 {
@@ -149,7 +211,143 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
 
 #endif  // VOMS_FOUND
 
+    {
+    const hdfs_handle_t *hdfs_handle;
+    int user_transfer_limit;
+    int transfer_limit;
+    check_connection_limits(hdfs_handle, user_transfer_limit, transfer_limit);
+    }
     original_init_function(op, session);
+}
+
+
+/*************************************************************************
+ * check_connection_limits
+ * -----------------------
+ * Make sure the number of concurrent connections to HDFS is below a certain
+ * threshold.  If we are over-threshold, wait for a fixed amount of time (1 
+ * minute) and fail the transfer.
+ * Implementation baed on named POSIX semaphores.
+ *************************************************************************/
+globus_result_t
+check_connection_limits(const hdfs_handle_t *hdfs_handle, int user_transfer_limit, int transfer_limit)
+{
+    GlobusGFSName(check_connection_limit);
+    globus_result_t result = GLOBUS_SUCCESS;
+
+    int user_lock_count = 0;
+    if (user_transfer_limit > 0) {
+        char user_sem_name[256];
+        snprintf(user_sem_name, 255, "/dev/shm/gridftp-hdfs-%s-%d", hdfs_handle->username, user_transfer_limit);
+        user_sem_name[255] = '\0';
+        int usem = dumb_sem_open(user_sem_name, O_CREAT, 0600, user_transfer_limit);
+        if (usem == -1) {
+            SystemError(hdfs_handle, "Failure when determining user connection limit", result);
+            return result;
+        }
+        if (-1 == (user_lock_count = dumb_sem_timedwait(usem, user_transfer_limit, 60))) {
+            if (errno == ETIMEDOUT) {
+                globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Failing transfer for %s due to user connection limit of %d.\n", hdfs_handle->username, user_transfer_limit);
+                char * failure_msg = (char *)globus_malloc(1024);
+                snprintf(failure_msg, 1024, "Server over the user connection limit of %d", user_transfer_limit);
+                failure_msg[1023] = '\0';
+                GenericError(hdfs_handle, failure_msg, result);
+                globus_free(failure_msg);
+            } else {
+                SystemError(hdfs_handle, "Failed to check user connection semaphore", result);
+            }
+            return result;
+        }
+        // NOTE: We now purposely leak the semaphore.  It will be automatically closed when
+        // the server process finishes this connection.
+    }
+
+    int global_lock_count = 0;
+    if (transfer_limit > 0) {
+        char global_sem_name[256];
+        snprintf(global_sem_name, 255, "/dev/shm//gridftp-hdfs-overall-%d", transfer_limit);
+        global_sem_name[255] = '\0';
+        int gsem = dumb_sem_open(global_sem_name, O_CREAT, 0666, transfer_limit);
+        if (gsem == -1) {
+            SystemError(hdfs_handle, "Failure when determining global connection limit", result);
+            return result;
+        }
+        if (-1 == (global_lock_count=dumb_sem_timedwait(gsem, transfer_limit, 60))) {
+            if (errno == ETIMEDOUT) {
+                globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Failing transfer for %s due to global connection limit of %d (user has %d transfers).\n", hdfs_handle->username, transfer_limit, user_lock_count);
+                char * failure_msg = (char *)globus_malloc(1024);
+                snprintf(failure_msg, 1024, "Server over the global connection limit of %d (user has %d transfers)", transfer_limit, user_lock_count);
+                failure_msg[1023] = '\0';
+                GenericError(hdfs_handle, failure_msg, result);
+                globus_free(failure_msg);
+            } else {
+                SystemError(hdfs_handle, "Failed to check global connection semaphore", result);
+            }
+            return result;
+        }
+        // NOTE: We now purposely leak the semaphore.  It will be automatically closed when
+        // the server process finishes this connection.
+    }
+    if ((transfer_limit > 0) || (user_transfer_limit > 0)) {
+        globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Proceeding with transfer; user %s has %d active transfers (limit %d); server has %d active transfers (limit %d).\n", hdfs_handle->username, user_lock_count, user_transfer_limit, global_lock_count, transfer_limit);
+    }
+
+    return result;
+}
+
+int
+dumb_sem_open(const char *fname, int flags, mode_t mode, int value) {
+    int fd = open(fname, flags | O_RDWR, mode);
+    if (-1 == fd) {
+        return fd;
+    }
+    if (-1 == posix_fallocate(fd, 0, value)) {
+        return -1;
+    }
+    fchmod(fd, mode);
+    return fd;
+}
+int
+dumb_sem_timedwait(int fd, int value, int secs) {
+    struct timespec start, now, sleeptime;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    sleeptime.tv_sec = 0;
+    sleeptime.tv_nsec = 500*1e6;
+    while (1) {
+        int idx = 0;
+        int lock_count = 0;
+        int need_lock = 1;
+        for (idx=0; idx<value; idx++) {
+            struct flock mylock; memset(&mylock, '\0', sizeof(mylock));
+            mylock.l_type = F_WRLCK;
+            mylock.l_whence = SEEK_SET;
+            mylock.l_start = idx;
+            mylock.l_len = 1;
+            if (0 == fcntl(fd, need_lock ? F_SETLK : F_GETLK, &mylock)) {
+                if (need_lock) {  // We now have the lock.
+                    need_lock = 0;
+                    lock_count++;
+                } else if (mylock.l_type != F_UNLCK) {  // We're just seeing how many locks are taken.
+                    lock_count++;
+                }
+                continue;
+            }
+            if (errno == EAGAIN || errno == EACCES || errno == EINTR) {
+                lock_count++;
+                continue;
+            }
+            return -1;
+        }
+        if (!need_lock) {  // we were able to take a lock.
+            return lock_count;
+        }
+        nanosleep(&sleeptime, NULL);
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (now.tv_sec > start.tv_sec + secs) {
+            errno = ETIMEDOUT;
+            return -1;
+        }
+    }
 }
 
 static void
