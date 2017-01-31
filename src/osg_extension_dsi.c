@@ -4,6 +4,8 @@
 //#include "gridftp_hdfs.h"
 #include "gridftp_hdfs_error.h"
 
+#include <syslog.h>
+
 #include <hdfs.h>
 #include <openssl/md5.h>
 
@@ -91,8 +93,12 @@ typedef struct globus_l_gfs_hdfs_handle_s
 } globus_l_gfs_hdfs_handle_t;
 typedef globus_l_gfs_hdfs_handle_t hdfs_handle_t;
 
-globus_result_t
-check_connection_limits(const hdfs_handle_t *hdfs_handle, int user_transfer_limit, int transfer_limit);
+globus_result_t check_connection_limits(const hdfs_handle_t *hdfs_handle,
+    int user_transfer_limit, int transfer_limit);
+
+void get_connection_limits_params(const hdfs_handle_t **hdfs_handle_p,
+    int *user_transfer_limit_p, int *transfer_limit_p,
+    globus_gfs_operation_t op, const globus_gfs_session_info_t *session_info);
 
 static globus_version_t osg_local_version =
 {
@@ -211,13 +217,133 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
 
 #endif  // VOMS_FOUND
 
-    {
     const hdfs_handle_t *hdfs_handle;
     int user_transfer_limit;
     int transfer_limit;
+    get_connection_limits_params(&hdfs_handle, &user_transfer_limit,
+            &transfer_limit, op, session);
+
     check_connection_limits(hdfs_handle, user_transfer_limit, transfer_limit);
-    }
+
     original_init_function(op, session);
+}
+
+void get_connection_limits_params( 
+        const hdfs_handle_t **hdfs_handle_p,
+        int *user_transfer_limit_p,
+        int *transfer_limit_p,
+        globus_gfs_operation_t op,
+        const globus_gfs_session_info_t *session_info)
+{
+    hdfs_handle_t* hdfs_handle;
+    globus_gfs_finished_info_t finished_info;
+    GlobusGFSName(hdfs_start);
+    hdfs_handle = (hdfs_handle_t *)globus_malloc(sizeof(hdfs_handle_t));
+
+    globus_result_t rc;
+
+    int user_transfer_limit = -1;
+    int transfer_limit = -1;
+
+    memset(hdfs_handle, 0, sizeof(hdfs_handle_t));
+
+    if (!hdfs_handle) {
+        MemoryError(hdfs_handle, "Unable to allocate a new HDFS handle.", rc);
+        finished_info.result = rc;
+        globus_gridftp_server_operation_finished(op, rc, &finished_info);
+        return;
+    }
+
+
+    hdfs_handle->mutex = (globus_mutex_t *)malloc(sizeof(globus_mutex_t));
+    if (!(hdfs_handle->mutex)) {
+        MemoryError(hdfs_handle, "Unable to allocate a new mutex for HDFS.", rc);
+        finished_info.result = rc;
+        globus_gridftp_server_operation_finished(op, rc, &finished_info);
+        return;
+    }
+    if (globus_mutex_init(hdfs_handle->mutex, GLOBUS_NULL)) {
+        SystemError(hdfs_handle, "Unable to initialize mutex", rc);
+        globus_gridftp_server_operation_finished(op, rc, &finished_info);
+        return;
+    }
+
+    hdfs_handle->io_block_size = 0;
+    hdfs_handle->io_count = 0;
+
+
+    // Copy the username from the session_info to the HDFS handle.
+    size_t strlength = strlen(session_info->username)+1;
+    strlength = strlength < 256 ? strlength  : 256;
+    hdfs_handle->username = globus_malloc(sizeof(char)*strlength);
+    if (hdfs_handle->username == NULL) {
+        //gridftp_user_name[0] = '\0';
+        finished_info.result = GLOBUS_FAILURE;
+        globus_gridftp_server_operation_finished(
+            op, GLOBUS_FAILURE, &finished_info);
+        return;
+    }
+    strncpy(hdfs_handle->username, session_info->username, strlength);
+
+    // also copy username to global variable gridftp_user_name
+    //strncpy(gridftp_user_name, session_info->username, strlength);
+
+
+    // Pull configuration from environment.
+    hdfs_handle->replicas = 3;
+    hdfs_handle->host = "hadoop-name";
+    hdfs_handle->mount_point = "/mnt/hadoop";
+    hdfs_handle->port = 9000;
+
+    char * global_transfer_limit_char = getenv("GRIDFTP_TRANSFER_LIMIT");
+    char * default_user_limit_char = getenv("GRIDFTP_DEFAULT_USER_TRANSFER_LIMIT");
+
+    char specific_limit_env_var[256];
+
+    snprintf(specific_limit_env_var, 255, "GRIDFTP_%s_USER_TRANSFER_LIMIT", hdfs_handle->username);
+    specific_limit_env_var[255] = '\0';
+    int idx;
+    for (idx=0; idx<256; idx++) {
+        if (specific_limit_env_var[idx] == '\0') {break;}
+        specific_limit_env_var[idx] = toupper(specific_limit_env_var[idx]);
+    }
+    char * specific_user_limit_char = getenv(specific_limit_env_var);
+
+    if (!specific_user_limit_char) {
+        specific_user_limit_char = default_user_limit_char;
+    }
+    if (specific_user_limit_char) {
+        user_transfer_limit = atoi(specific_user_limit_char);
+    }
+    if (global_transfer_limit_char) {
+        transfer_limit = atoi(global_transfer_limit_char);
+    }
+
+    // Get our hostname
+    hdfs_handle->local_host = globus_malloc(256);
+    if (hdfs_handle->local_host) {
+        memset(hdfs_handle->local_host, 0, 256);
+        if (gethostname(hdfs_handle->local_host, 255)) {
+            strcpy(hdfs_handle->local_host, "UNKNOWN");
+        }
+    }
+
+    // Pull syslog configuration from environment.
+    char * syslog_host_char = getenv("GRIDFTP_SYSLOG");
+    if (syslog_host_char == NULL) {
+        hdfs_handle->syslog_host = NULL;
+    } else {
+        hdfs_handle->syslog_host = syslog_host_char; 
+        hdfs_handle->remote_host = session_info->host_id;
+        openlog("GRIDFTP", 0, LOG_LOCAL2);
+        hdfs_handle->syslog_msg = (char *)globus_malloc(256);
+        if (hdfs_handle->syslog_msg)
+            snprintf(hdfs_handle->syslog_msg, 255, "%s %s %%s %%i %%i", hdfs_handle->local_host, hdfs_handle->remote_host);
+    }
+
+    *hdfs_handle_p = hdfs_handle;
+    *user_transfer_limit_p = user_transfer_limit;
+    *transfer_limit_p = transfer_limit;
 }
 
 
