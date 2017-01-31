@@ -245,14 +245,20 @@ get_connection_limits_params(
     hdfs_handle_t* hdfs_handle;
     globus_gfs_finished_info_t finished_info;
     GlobusGFSName(hdfs_start);
-    hdfs_handle = (hdfs_handle_t *)globus_malloc(sizeof(hdfs_handle_t));
-
     globus_result_t rc;
 
     int user_transfer_limit = -1;
     int transfer_limit = -1;
 
+    hdfs_handle = (hdfs_handle_t *)globus_malloc(sizeof(hdfs_handle_t));
     memset(hdfs_handle, 0, sizeof(hdfs_handle_t));
+
+    memset(&finished_info, 0, sizeof(globus_gfs_finished_info_t));
+    finished_info.type = GLOBUS_GFS_OP_SESSION_START;
+    finished_info.result = GLOBUS_SUCCESS;
+    finished_info.info.session.session_arg = hdfs_handle;
+    finished_info.info.session.username = session_info->username;
+    finished_info.info.session.home_dir = "/";
 
     if (!hdfs_handle) {
         MemoryError(hdfs_handle, "Unable to allocate a new HDFS handle.", rc);
