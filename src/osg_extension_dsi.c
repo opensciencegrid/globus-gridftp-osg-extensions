@@ -97,10 +97,12 @@ typedef struct globus_l_gfs_hdfs_handle_s
 } globus_l_gfs_hdfs_handle_t;
 typedef globus_l_gfs_hdfs_handle_t hdfs_handle_t;
 
-globus_result_t check_connection_limits(const hdfs_handle_t *hdfs_handle,
+globus_result_t
+check_connection_limits(const hdfs_handle_t *hdfs_handle,
     int user_transfer_limit, int transfer_limit);
 
-void get_connection_limits_params(const hdfs_handle_t **hdfs_handle_p,
+static void
+get_connection_limits_params(const hdfs_handle_t **hdfs_handle_p,
     int *user_transfer_limit_p, int *transfer_limit_p,
     globus_gfs_operation_t op, const globus_gfs_session_info_t *session_info);
 
@@ -232,7 +234,8 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
     original_init_function(op, session);
 }
 
-void get_connection_limits_params( 
+void
+get_connection_limits_params(
         const hdfs_handle_t **hdfs_handle_p,
         int *user_transfer_limit_p,
         int *transfer_limit_p,
