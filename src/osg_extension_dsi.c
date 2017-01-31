@@ -1,12 +1,10 @@
 
 #include "globus_gridftp_server.h"
 #include "version.h"
-//#include "gridftp_hdfs.h"
 #include "gridftp_hdfs_error.h"
 
 #include <syslog.h>
 
-#include <hdfs.h>
 #include <openssl/md5.h>
 
 #ifdef VOMS_FOUND
@@ -37,6 +35,12 @@ do                                                                     \
         globus_free(_tmp_str);                                         \
                                                                        \
 } while(0)
+
+// from hdfs.h
+struct hdfs_internal;
+typedef struct hdfs_internal* hdfsFS;
+struct hdfsFile_internal;
+typedef struct hdfsFile_internal* hdfsFile;
 
 // from gridftp_hdfs.h
 typedef struct globus_l_gfs_hdfs_handle_s
