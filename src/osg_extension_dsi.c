@@ -5,8 +5,6 @@
 
 #include <syslog.h>
 
-#include <openssl/md5.h>
-
 #ifdef VOMS_FOUND
 #include "voms_apic.h"
 #endif  // VOMS_FOUND
@@ -46,54 +44,12 @@ typedef struct hdfsFile_internal* hdfsFile;
 typedef struct globus_l_gfs_hdfs_handle_s
 {
     char *                              pathname;
-    hdfsFS                              fs;
-    hdfsFile                            fd;
-    globus_off_t                        file_size; // size of the file for reads
-    globus_size_t                       block_size;
-    globus_off_t                        op_length; // Length of the requested read/write size
-    globus_off_t                        offset;
-    unsigned int                        done;
-    globus_result_t                     done_status; // The status of the finished transfer.
-    globus_bool_t                       sent_finish; // Whether or not we have sent the client an abort.
-    globus_gfs_operation_t              op;
-    globus_byte_t *                     buffer;
-    globus_off_t *                      offsets; // The offset of each buffer.
-    globus_size_t *                     nbytes; // The number of bytes in each buffer.
-    short *                             used;
-    int                                 optimal_count;
-    unsigned int                        max_buffer_count;
-    unsigned int                        max_file_buffer_count;
-    unsigned int                        buffer_count; // Number of buffers we currently maintain in memory waiting to be written to HDFS.
-    unsigned int                        outstanding;
     globus_mutex_t *                    mutex;
-    int                                 port;
-    char *                              host;
-    char *                              mount_point;
-    unsigned int                        mount_point_len;
-    unsigned int                        replicas;
     char *                              username;
-    char *                              tmp_file_pattern;
-    int                                 tmpfilefd;
-    globus_bool_t                       using_file_buffer;
     char *                              syslog_host; // The host to send syslog message to.
     char *                              remote_host; // The remote host connecting to us.
     char *                              local_host;  // Our local hostname.
     char *                              syslog_msg;  // Message printed out to syslog.
-    unsigned int                        io_block_size;
-    unsigned long long                  io_count;
-    globus_bool_t                       eof;
-
-    // Checksumming support
-    char *                              expected_cksm;
-    const char *                        cksm_root;
-    unsigned char                       cksm_types;
-    MD5_CTX                             md5;
-    char                                md5_output[MD5_DIGEST_LENGTH];
-    char                                md5_output_human[MD5_DIGEST_LENGTH*2+1];
-    uint32_t                            adler32;
-    char                                adler32_human[2*sizeof(uint32_t)+1];
-    uint32_t                            crc32;
-    uint32_t                            cksum;
 } globus_l_gfs_hdfs_handle_t;
 typedef globus_l_gfs_hdfs_handle_t hdfs_handle_t;
 
@@ -281,9 +237,6 @@ get_connection_limits_params(
         return;
     }
 
-    hdfs_handle->io_block_size = 0;
-    hdfs_handle->io_count = 0;
-
 
     // Copy the username from the session_info to the HDFS handle.
     size_t strlength = strlen(session_info->username)+1;
@@ -303,10 +256,6 @@ get_connection_limits_params(
 
 
     // Pull configuration from environment.
-    hdfs_handle->replicas = 3;
-    hdfs_handle->host = "hadoop-name";
-    hdfs_handle->mount_point = "/mnt/hadoop";
-    hdfs_handle->port = 9000;
 
     char * global_transfer_limit_char = getenv("GRIDFTP_TRANSFER_LIMIT");
     char * default_user_limit_char = getenv("GRIDFTP_DEFAULT_USER_TRANSFER_LIMIT");
