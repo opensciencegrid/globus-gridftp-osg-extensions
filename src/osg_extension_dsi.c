@@ -32,21 +32,20 @@ do                                                                     \
                                                                        \
 } while(0)
 
-// from gridftp_hdfs.h
-typedef struct globus_l_gfs_hdfs_handle_s
+// original struct globus_l_gfs_hdfs_handle_s from gridftp_hdfs.h
+typedef struct
 {
     char *                              pathname;
     char *                              username;
     char *                              local_host;  // Our local hostname.
-} globus_l_gfs_hdfs_handle_t;
-typedef globus_l_gfs_hdfs_handle_t hdfs_handle_t;
+} names_handle_t;
 
 globus_result_t
-check_connection_limits(const hdfs_handle_t *hdfs_handle,
+check_connection_limits(const names_handle_t *names_handle,
     int user_transfer_limit, int transfer_limit);
 
 static void
-get_connection_limits_params(const hdfs_handle_t **hdfs_handle_p,
+get_connection_limits_params(const names_handle_t **names_handle_p,
     int *user_transfer_limit_p, int *transfer_limit_p,
     globus_gfs_operation_t op, const globus_gfs_session_info_t *session_info);
 
@@ -167,26 +166,26 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
 
 #endif  // VOMS_FOUND
 
-    const hdfs_handle_t *hdfs_handle;
+    const names_handle_t *names_handle;
     int user_transfer_limit;
     int transfer_limit;
-    get_connection_limits_params(&hdfs_handle, &user_transfer_limit,
+    get_connection_limits_params(&names_handle, &user_transfer_limit,
             &transfer_limit, op, session);
 
-    check_connection_limits(hdfs_handle, user_transfer_limit, transfer_limit);
+    check_connection_limits(names_handle, user_transfer_limit, transfer_limit);
 
     original_init_function(op, session);
 }
 
 void
 get_connection_limits_params(
-        const hdfs_handle_t **hdfs_handle_p,
+        const names_handle_t **names_handle_p,
         int *user_transfer_limit_p,
         int *transfer_limit_p,
         globus_gfs_operation_t op,
         const globus_gfs_session_info_t *session_info)
 {
-    hdfs_handle_t* hdfs_handle;
+    names_handle_t* names_handle;
     globus_gfs_finished_info_t finished_info;
     GlobusGFSName(hdfs_start);
     globus_result_t rc;
@@ -194,18 +193,18 @@ get_connection_limits_params(
     int user_transfer_limit = -1;
     int transfer_limit = -1;
 
-    hdfs_handle = (hdfs_handle_t *)globus_malloc(sizeof(hdfs_handle_t));
-    memset(hdfs_handle, 0, sizeof(hdfs_handle_t));
+    names_handle = (names_handle_t *)globus_malloc(sizeof(names_handle_t));
+    memset(names_handle, 0, sizeof(names_handle_t));
 
     memset(&finished_info, 0, sizeof(globus_gfs_finished_info_t));
     finished_info.type = GLOBUS_GFS_OP_SESSION_START;
     finished_info.result = GLOBUS_SUCCESS;
-    finished_info.info.session.session_arg = hdfs_handle;
+    finished_info.info.session.session_arg = names_handle;
     finished_info.info.session.username = session_info->username;
     finished_info.info.session.home_dir = "/";
 
-    if (!hdfs_handle) {
-        MemoryError(hdfs_handle, "Unable to allocate a new HDFS handle.", rc);
+    if (!names_handle) {
+        MemoryError(names_handle, "Unable to allocate a new HDFS handle.", rc);
         finished_info.result = rc;
         globus_gridftp_server_operation_finished(op, rc, &finished_info);
         return;
@@ -215,15 +214,15 @@ get_connection_limits_params(
     // Copy the username from the session_info to the HDFS handle.
     size_t strlength = strlen(session_info->username)+1;
     strlength = strlength < 256 ? strlength  : 256;
-    hdfs_handle->username = globus_malloc(sizeof(char)*strlength);
-    if (hdfs_handle->username == NULL) {
+    names_handle->username = globus_malloc(sizeof(char)*strlength);
+    if (names_handle->username == NULL) {
         //gridftp_user_name[0] = '\0';
         finished_info.result = GLOBUS_FAILURE;
         globus_gridftp_server_operation_finished(
             op, GLOBUS_FAILURE, &finished_info);
         return;
     }
-    strncpy(hdfs_handle->username, session_info->username, strlength);
+    strncpy(names_handle->username, session_info->username, strlength);
 
     // also copy username to global variable gridftp_user_name
     //strncpy(gridftp_user_name, session_info->username, strlength);
@@ -236,7 +235,7 @@ get_connection_limits_params(
 
     char specific_limit_env_var[256];
 
-    snprintf(specific_limit_env_var, 255, "GRIDFTP_%s_USER_TRANSFER_LIMIT", hdfs_handle->username);
+    snprintf(specific_limit_env_var, 255, "GRIDFTP_%s_USER_TRANSFER_LIMIT", names_handle->username);
     specific_limit_env_var[255] = '\0';
     int idx;
     for (idx=0; idx<256; idx++) {
@@ -256,15 +255,15 @@ get_connection_limits_params(
     }
 
     // Get our hostname
-    hdfs_handle->local_host = globus_malloc(256);
-    if (hdfs_handle->local_host) {
-        memset(hdfs_handle->local_host, 0, 256);
-        if (gethostname(hdfs_handle->local_host, 255)) {
-            strcpy(hdfs_handle->local_host, "UNKNOWN");
+    names_handle->local_host = globus_malloc(256);
+    if (names_handle->local_host) {
+        memset(names_handle->local_host, 0, 256);
+        if (gethostname(names_handle->local_host, 255)) {
+            strcpy(names_handle->local_host, "UNKNOWN");
         }
     }
 
-    *hdfs_handle_p = hdfs_handle;
+    *names_handle_p = names_handle;
     *user_transfer_limit_p = user_transfer_limit;
     *transfer_limit_p = transfer_limit;
 }
@@ -279,7 +278,7 @@ get_connection_limits_params(
  * Implementation baed on named POSIX semaphores.
  *************************************************************************/
 globus_result_t
-check_connection_limits(const hdfs_handle_t *hdfs_handle, int user_transfer_limit, int transfer_limit)
+check_connection_limits(const names_handle_t *names_handle, int user_transfer_limit, int transfer_limit)
 {
     GlobusGFSName(check_connection_limit);
     globus_result_t result = GLOBUS_SUCCESS;
@@ -287,23 +286,23 @@ check_connection_limits(const hdfs_handle_t *hdfs_handle, int user_transfer_limi
     int user_lock_count = 0;
     if (user_transfer_limit > 0) {
         char user_sem_name[256];
-        snprintf(user_sem_name, 255, "/dev/shm/gridftp-hdfs-%s-%d", hdfs_handle->username, user_transfer_limit);
+        snprintf(user_sem_name, 255, "/dev/shm/gridftp-hdfs-%s-%d", names_handle->username, user_transfer_limit);
         user_sem_name[255] = '\0';
         int usem = dumb_sem_open(user_sem_name, O_CREAT, 0600, user_transfer_limit);
         if (usem == -1) {
-            SystemError(hdfs_handle, "Failure when determining user connection limit", result);
+            SystemError(names_handle, "Failure when determining user connection limit", result);
             return result;
         }
         if (-1 == (user_lock_count = dumb_sem_timedwait(usem, user_transfer_limit, 60))) {
             if (errno == ETIMEDOUT) {
-                globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Failing transfer for %s due to user connection limit of %d.\n", hdfs_handle->username, user_transfer_limit);
+                globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Failing transfer for %s due to user connection limit of %d.\n", names_handle->username, user_transfer_limit);
                 char * failure_msg = (char *)globus_malloc(1024);
                 snprintf(failure_msg, 1024, "Server over the user connection limit of %d", user_transfer_limit);
                 failure_msg[1023] = '\0';
-                GenericError(hdfs_handle, failure_msg, result);
+                GenericError(names_handle, failure_msg, result);
                 globus_free(failure_msg);
             } else {
-                SystemError(hdfs_handle, "Failed to check user connection semaphore", result);
+                SystemError(names_handle, "Failed to check user connection semaphore", result);
             }
             return result;
         }
@@ -318,19 +317,19 @@ check_connection_limits(const hdfs_handle_t *hdfs_handle, int user_transfer_limi
         global_sem_name[255] = '\0';
         int gsem = dumb_sem_open(global_sem_name, O_CREAT, 0666, transfer_limit);
         if (gsem == -1) {
-            SystemError(hdfs_handle, "Failure when determining global connection limit", result);
+            SystemError(names_handle, "Failure when determining global connection limit", result);
             return result;
         }
         if (-1 == (global_lock_count=dumb_sem_timedwait(gsem, transfer_limit, 60))) {
             if (errno == ETIMEDOUT) {
-                globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Failing transfer for %s due to global connection limit of %d (user has %d transfers).\n", hdfs_handle->username, transfer_limit, user_lock_count);
+                globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Failing transfer for %s due to global connection limit of %d (user has %d transfers).\n", names_handle->username, transfer_limit, user_lock_count);
                 char * failure_msg = (char *)globus_malloc(1024);
                 snprintf(failure_msg, 1024, "Server over the global connection limit of %d (user has %d transfers)", transfer_limit, user_lock_count);
                 failure_msg[1023] = '\0';
-                GenericError(hdfs_handle, failure_msg, result);
+                GenericError(names_handle, failure_msg, result);
                 globus_free(failure_msg);
             } else {
-                SystemError(hdfs_handle, "Failed to check global connection semaphore", result);
+                SystemError(names_handle, "Failed to check global connection semaphore", result);
             }
             return result;
         }
@@ -338,7 +337,7 @@ check_connection_limits(const hdfs_handle_t *hdfs_handle, int user_transfer_limi
         // the server process finishes this connection.
     }
     if ((transfer_limit > 0) || (user_transfer_limit > 0)) {
-        globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Proceeding with transfer; user %s has %d active transfers (limit %d); server has %d active transfers (limit %d).\n", hdfs_handle->username, user_lock_count, user_transfer_limit, global_lock_count, transfer_limit);
+        globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Proceeding with transfer; user %s has %d active transfers (limit %d); server has %d active transfers (limit %d).\n", names_handle->username, user_lock_count, user_transfer_limit, global_lock_count, transfer_limit);
     }
 
     return result;
