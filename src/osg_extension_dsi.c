@@ -3,8 +3,6 @@
 #include "version.h"
 #include "gridftp_hdfs_error.h"
 
-#include <syslog.h>
-
 #ifdef VOMS_FOUND
 #include "voms_apic.h"
 #endif  // VOMS_FOUND
@@ -39,10 +37,7 @@ typedef struct globus_l_gfs_hdfs_handle_s
 {
     char *                              pathname;
     char *                              username;
-    char *                              syslog_host; // The host to send syslog message to.
-    char *                              remote_host; // The remote host connecting to us.
     char *                              local_host;  // Our local hostname.
-    char *                              syslog_msg;  // Message printed out to syslog.
 } globus_l_gfs_hdfs_handle_t;
 typedef globus_l_gfs_hdfs_handle_t hdfs_handle_t;
 
@@ -267,19 +262,6 @@ get_connection_limits_params(
         if (gethostname(hdfs_handle->local_host, 255)) {
             strcpy(hdfs_handle->local_host, "UNKNOWN");
         }
-    }
-
-    // Pull syslog configuration from environment.
-    char * syslog_host_char = getenv("GRIDFTP_SYSLOG");
-    if (syslog_host_char == NULL) {
-        hdfs_handle->syslog_host = NULL;
-    } else {
-        hdfs_handle->syslog_host = syslog_host_char; 
-        hdfs_handle->remote_host = session_info->host_id;
-        openlog("GRIDFTP", 0, LOG_LOCAL2);
-        hdfs_handle->syslog_msg = (char *)globus_malloc(256);
-        if (hdfs_handle->syslog_msg)
-            snprintf(hdfs_handle->syslog_msg, 255, "%s %s %%s %%i %%i", hdfs_handle->local_host, hdfs_handle->remote_host);
     }
 
     *hdfs_handle_p = hdfs_handle;
