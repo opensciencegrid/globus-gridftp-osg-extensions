@@ -34,12 +34,6 @@ do                                                                     \
                                                                        \
 } while(0)
 
-// from hdfs.h
-struct hdfs_internal;
-typedef struct hdfs_internal* hdfsFS;
-struct hdfsFile_internal;
-typedef struct hdfsFile_internal* hdfsFile;
-
 // from gridftp_hdfs.h
 typedef struct globus_l_gfs_hdfs_handle_s
 {
