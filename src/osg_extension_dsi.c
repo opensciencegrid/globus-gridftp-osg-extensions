@@ -44,7 +44,6 @@ typedef struct hdfsFile_internal* hdfsFile;
 typedef struct globus_l_gfs_hdfs_handle_s
 {
     char *                              pathname;
-    globus_mutex_t *                    mutex;
     char *                              username;
     char *                              syslog_host; // The host to send syslog message to.
     char *                              remote_host; // The remote host connecting to us.
@@ -219,20 +218,6 @@ get_connection_limits_params(
     if (!hdfs_handle) {
         MemoryError(hdfs_handle, "Unable to allocate a new HDFS handle.", rc);
         finished_info.result = rc;
-        globus_gridftp_server_operation_finished(op, rc, &finished_info);
-        return;
-    }
-
-
-    hdfs_handle->mutex = (globus_mutex_t *)malloc(sizeof(globus_mutex_t));
-    if (!(hdfs_handle->mutex)) {
-        MemoryError(hdfs_handle, "Unable to allocate a new mutex for HDFS.", rc);
-        finished_info.result = rc;
-        globus_gridftp_server_operation_finished(op, rc, &finished_info);
-        return;
-    }
-    if (globus_mutex_init(hdfs_handle->mutex, GLOBUS_NULL)) {
-        SystemError(hdfs_handle, "Unable to initialize mutex", rc);
         globus_gridftp_server_operation_finished(op, rc, &finished_info);
         return;
     }
