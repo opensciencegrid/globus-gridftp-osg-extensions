@@ -159,8 +159,8 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
     int transfer_limit;
 
     char username[256] = {};
-    size_t strlength = strlen(username)+1;
-    strlength = strlength < 256 ? strlength : 256;
+    size_t strlength = strlen(username);
+    strlength = strlength < 256 ? strlength : 255;
     strncpy(username, session->username, strlength);
 
     get_connection_limits_params(username, &user_transfer_limit, &transfer_limit);
