@@ -1,7 +1,7 @@
 
 #include "globus_gridftp_server.h"
 #include "version.h"
-#include "gridftp_hdfs_error.h"
+#include "globus_error_macros.h"
 
 #ifdef VOMS_FOUND
 #include "voms_apic.h"
