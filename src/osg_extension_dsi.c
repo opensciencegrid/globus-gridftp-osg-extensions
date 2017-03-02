@@ -35,7 +35,6 @@ do                                                                     \
 // original struct globus_l_gfs_hdfs_handle_s from gridftp_hdfs.h
 typedef struct
 {
-    char *                              pathname;
     char *                              username;
     char *                              local_host;  // Our local hostname.
 } names_handle_t;

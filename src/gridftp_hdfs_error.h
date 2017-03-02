@@ -5,9 +5,8 @@
 #define SomeError(hdfs_handle, msg) \
     char * formatted_msg = (char *)globus_malloc(MESSAGE_BUFFER_SIZE); \
     char * user = hdfs_handle ? hdfs_handle->username : NULL; \
-    char * path = hdfs_handle ? hdfs_handle->pathname : NULL; \
     char * host = hdfs_handle ? hdfs_handle->local_host : NULL; \
-    snprintf(formatted_msg, MESSAGE_BUFFER_SIZE, "%s (host=%s, user=%s, path=%s)", msg, host, user, path); \
+    snprintf(formatted_msg, MESSAGE_BUFFER_SIZE, "%s (host=%s, user=%s)", msg, host, user); \
     formatted_msg[MESSAGE_BUFFER_SIZE-1] = '\0'; \
     globus_gfs_log_message(GLOBUS_GFS_LOG_ERR, "%s\n", formatted_msg);
     
