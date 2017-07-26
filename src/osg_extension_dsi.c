@@ -522,10 +522,14 @@ osg_activate(void)
 static int
 osg_deactivate(void)
 {
+    globus_result_t result = GLOBUS_SUCCESS;
+
     globus_extension_registry_remove(
         GLOBUS_GFS_DSI_REGISTRY, "osg");
 
     globus_extension_release(osg_dsi_handle);
+
+    return result;
 }
 
 
