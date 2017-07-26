@@ -94,3 +94,28 @@ To see the transfer-level logging, we recommend the following log statement in `
 ```
 log_level ERROR,WARN,INFO,TRANSFER
 ```
+
+## Limiting user load
+
+The OSG DSI provides mechanisms for limiting the number of concurrent transfers at the per-server
+and per-user level (this mechanism is disabled by default).  When a concurrency limit has been hit,
+the transfer will be queued for up to a minute; if the usage level does not fall below the maximum
+concurrency within a minute, the transfer will be failed.
+
+To enable transfer limits, set one of the following environment variables in
+`/etc/sysconfig/globus-gridftp-server`:
+
+- `GRIDFTP_TRANSFER_LIMIT`: The maximum number of transfers server-wide.
+- `GRIDFTP_DEFAULT_USER_TRANSFER_LIMIT`: The default number of transfers per Unix user.
+- `GRIDFTP_$USERNAME_USER_TRANSFER_LIMIT`: A specific limit specific to user `$USERNAME`.
+
+The smallest defined applicable limit will be the one applied.
+
+For example, to limit a server to 80 total concurrent transfers, the `ligo` user to 40 transfers, and all
+other users to 50 each, one would add the following lines to `/etc/sysconfig/globus-gridftp-server`:
+
+```
+export GRIDFTP_TRANSFER_LIMIT="80"
+export GRIDFTP_DEFAULT_USER_TRANSFER_LIMIT="50"
+export GRIDFTP_LIGO_USER_TRANSFER_LIMIT="40"
+```
