@@ -7,7 +7,7 @@
     snprintf(formatted_msg, MESSAGE_BUFFER_SIZE, "%s (host=%s, user=%s)", msg, host, user); \
     formatted_msg[MESSAGE_BUFFER_SIZE-1] = '\0'; \
     globus_gfs_log_message(GLOBUS_GFS_LOG_ERR, "%s\n", formatted_msg);
-    
+
 
 #define GenericError(user, host, msg, rc) \
     SomeError(user, host, msg) \

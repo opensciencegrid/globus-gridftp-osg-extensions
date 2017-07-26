@@ -170,13 +170,13 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
     original_init_function(op, session);
 }
 
-void
+static void
 get_connection_limits_params(
         const char *username,
         int *user_transfer_limit_p,
         int *transfer_limit_p)
 {
-    GlobusGFSName(hdfs_start);
+    GlobusGFSName(get_connetion_limits_params);
     globus_result_t rc;
 
     int user_transfer_limit = -1;
@@ -217,7 +217,7 @@ get_connection_limits_params(
  * check_connection_limits
  * -----------------------
  * Make sure the number of concurrent connections to HDFS is below a certain
- * threshold.  If we are over-threshold, wait for a fixed amount of time (1 
+ * threshold.  If we are over-threshold, wait for a fixed amount of time (1
  * minute) and fail the transfer.
  * Implementation baed on named POSIX semaphores.
  *************************************************************************/
@@ -236,7 +236,7 @@ check_connection_limits(const char *username, int user_transfer_limit, int trans
     int user_lock_count = 0;
     if (user_transfer_limit > 0) {
         char user_sem_name[256];
-        snprintf(user_sem_name, 255, "/dev/shm/gridftp-hdfs-%s-%d", username, user_transfer_limit);
+        snprintf(user_sem_name, 255, "/dev/shm/gridftp-osg-%s-%d", username, user_transfer_limit);
         user_sem_name[255] = '\0';
         int usem = dumb_sem_open(user_sem_name, O_CREAT, 0600, user_transfer_limit);
         if (usem == -1) {
@@ -263,7 +263,7 @@ check_connection_limits(const char *username, int user_transfer_limit, int trans
     int global_lock_count = 0;
     if (transfer_limit > 0) {
         char global_sem_name[256];
-        snprintf(global_sem_name, 255, "/dev/shm//gridftp-hdfs-overall-%d", transfer_limit);
+        snprintf(global_sem_name, 255, "/dev/shm//gridftp-osg-overall-%d", transfer_limit);
         global_sem_name[255] = '\0';
         int gsem = dumb_sem_open(global_sem_name, O_CREAT, 0666, transfer_limit);
         if (gsem == -1) {

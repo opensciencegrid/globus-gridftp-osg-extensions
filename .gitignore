@@ -5,3 +5,4 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 src/version.h
+*.tar.gz
