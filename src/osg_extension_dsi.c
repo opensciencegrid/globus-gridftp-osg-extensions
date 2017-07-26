@@ -32,11 +32,17 @@ do                                                                     \
                                                                        \
 } while(0)
 
-globus_result_t
+static globus_result_t
 check_connection_limits(const char *username, int user_transfer_limit, int transfer_limit);
 
 static void
 get_connection_limits_params(const char *username, int *user_transfer_limit_p, int *transfer_limit_p);
+
+static int
+dumb_sem_open(const char *fname, int flags, mode_t mode, int value);
+
+static int
+dumb_sem_timedwait(int fd, int value, int secs);
 
 static globus_version_t osg_local_version =
 {
@@ -185,7 +191,6 @@ get_connection_limits_params(
         int *transfer_limit_p)
 {
     GlobusGFSName(get_connetion_limits_params);
-    globus_result_t rc;
 
     int user_transfer_limit = -1;
     int transfer_limit = -1;
@@ -224,12 +229,12 @@ get_connection_limits_params(
 /*************************************************************************
  * check_connection_limits
  * -----------------------
- * Make sure the number of concurrent connections to HDFS is below a certain
+ * Make sure the number of concurrent connections to the server is below a certain
  * threshold.  If we are over-threshold, wait for a fixed amount of time (1
  * minute) and fail the transfer.
  * Implementation baed on named POSIX semaphores.
  *************************************************************************/
-globus_result_t
+static globus_result_t
 check_connection_limits(const char *username, int user_transfer_limit, int transfer_limit)
 {
     GlobusGFSName(check_connection_limit);
@@ -301,7 +306,7 @@ check_connection_limits(const char *username, int user_transfer_limit, int trans
     return result;
 }
 
-int
+static int
 dumb_sem_open(const char *fname, int flags, mode_t mode, int value) {
     int fd = open(fname, flags | O_RDWR, mode);
     if (-1 == fd) {
@@ -313,7 +318,8 @@ dumb_sem_open(const char *fname, int flags, mode_t mode, int value) {
     fchmod(fd, mode);
     return fd;
 }
-int
+
+static int
 dumb_sem_timedwait(int fd, int value, int secs) {
     struct timespec start, now, sleeptime;
     clock_gettime(CLOCK_MONOTONIC, &start);
