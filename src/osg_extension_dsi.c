@@ -1,6 +1,7 @@
 
 #include "globus_gridftp_server.h"
 #include "version.h"
+#include "globus_error_macros.h"
 
 #ifdef VOMS_FOUND
 #include "voms_apic.h"
@@ -31,6 +32,11 @@ do                                                                     \
                                                                        \
 } while(0)
 
+globus_result_t
+check_connection_limits(const char *username, int user_transfer_limit, int transfer_limit);
+
+static void
+get_connection_limits_params(const char *username, int *user_transfer_limit_p, int *transfer_limit_p);
 
 static globus_version_t osg_local_version =
 {
@@ -149,7 +155,205 @@ osg_extensions_init(globus_gfs_operation_t op, globus_gfs_session_info_t * sessi
 
 #endif  // VOMS_FOUND
 
+    int user_transfer_limit;
+    int transfer_limit;
+
+    char username[256] = {};
+    size_t strlength = strlen(session->username);
+    strlength = strlength < 256 ? strlength : 255;
+    strncpy(username, session->username, strlength);
+
+    get_connection_limits_params(username, &user_transfer_limit, &transfer_limit);
+
+    result = check_connection_limits(username, user_transfer_limit, transfer_limit);
+    if (result != GLOBUS_SUCCESS) {
+        globus_gridftp_server_finished_session_start(op,
+                                                     result,
+                                                     NULL,
+                                                     NULL,
+                                                     NULL);
+        return;
+    }
+
     original_init_function(op, session);
+}
+
+static void
+get_connection_limits_params(
+        const char *username,
+        int *user_transfer_limit_p,
+        int *transfer_limit_p)
+{
+    GlobusGFSName(get_connetion_limits_params);
+    globus_result_t rc;
+
+    int user_transfer_limit = -1;
+    int transfer_limit = -1;
+
+    // Pull configuration from environment.
+
+    char * global_transfer_limit_char = getenv("GRIDFTP_TRANSFER_LIMIT");
+    char * default_user_limit_char = getenv("GRIDFTP_DEFAULT_USER_TRANSFER_LIMIT");
+
+    char specific_limit_env_var[256];
+
+    snprintf(specific_limit_env_var, 255, "GRIDFTP_%s_USER_TRANSFER_LIMIT", username);
+    specific_limit_env_var[255] = '\0';
+    int idx;
+    for (idx=0; idx<256; idx++) {
+        if (specific_limit_env_var[idx] == '\0') {break;}
+        specific_limit_env_var[idx] = toupper(specific_limit_env_var[idx]);
+    }
+    char * specific_user_limit_char = getenv(specific_limit_env_var);
+
+    if (!specific_user_limit_char) {
+        specific_user_limit_char = default_user_limit_char;
+    }
+    if (specific_user_limit_char) {
+        user_transfer_limit = atoi(specific_user_limit_char);
+    }
+    if (global_transfer_limit_char) {
+        transfer_limit = atoi(global_transfer_limit_char);
+    }
+
+    *user_transfer_limit_p = user_transfer_limit;
+    *transfer_limit_p = transfer_limit;
+}
+
+
+/*************************************************************************
+ * check_connection_limits
+ * -----------------------
+ * Make sure the number of concurrent connections to HDFS is below a certain
+ * threshold.  If we are over-threshold, wait for a fixed amount of time (1
+ * minute) and fail the transfer.
+ * Implementation baed on named POSIX semaphores.
+ *************************************************************************/
+globus_result_t
+check_connection_limits(const char *username, int user_transfer_limit, int transfer_limit)
+{
+    GlobusGFSName(check_connection_limit);
+    globus_result_t result = GLOBUS_SUCCESS;
+
+    // only used for Error macros
+    char local_host[256] = {};
+    if (gethostname(local_host, 255)) {
+        strcpy(local_host, "UNKNOWN");
+    }
+
+    int user_lock_count = 0;
+    if (user_transfer_limit > 0) {
+        char user_sem_name[256];
+        snprintf(user_sem_name, 255, "/dev/shm/gridftp-osg-%s-%d", username, user_transfer_limit);
+        user_sem_name[255] = '\0';
+        int usem = dumb_sem_open(user_sem_name, O_CREAT, 0600, user_transfer_limit);
+        if (usem == -1) {
+            SystemError(username, local_host, "Failure when determining user connection limit", result);
+            return result;
+        }
+        if (-1 == (user_lock_count = dumb_sem_timedwait(usem, user_transfer_limit, 60))) {
+            if (errno == ETIMEDOUT) {
+                globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Failing transfer for %s due to user connection limit of %d.\n", username, user_transfer_limit);
+                char * failure_msg = (char *)globus_malloc(1024);
+                snprintf(failure_msg, 1024, "Server over the user connection limit of %d", user_transfer_limit);
+                failure_msg[1023] = '\0';
+                GenericError(username, local_host, failure_msg, result);
+                globus_free(failure_msg);
+            } else {
+                SystemError(username, local_host, "Failed to check user connection semaphore", result);
+            }
+            return result;
+        }
+        // NOTE: We now purposely leak the semaphore.  It will be automatically closed when
+        // the server process finishes this connection.
+    }
+
+    int global_lock_count = 0;
+    if (transfer_limit > 0) {
+        char global_sem_name[256];
+        snprintf(global_sem_name, 255, "/dev/shm//gridftp-osg-overall-%d", transfer_limit);
+        global_sem_name[255] = '\0';
+        int gsem = dumb_sem_open(global_sem_name, O_CREAT, 0666, transfer_limit);
+        if (gsem == -1) {
+            SystemError(username, local_host, "Failure when determining global connection limit", result);
+            return result;
+        }
+        if (-1 == (global_lock_count=dumb_sem_timedwait(gsem, transfer_limit, 60))) {
+            if (errno == ETIMEDOUT) {
+                globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Failing transfer for %s due to global connection limit of %d (user has %d transfers).\n", username, transfer_limit, user_lock_count);
+                char * failure_msg = (char *)globus_malloc(1024);
+                snprintf(failure_msg, 1024, "Server over the global connection limit of %d (user has %d transfers)", transfer_limit, user_lock_count);
+                failure_msg[1023] = '\0';
+                GenericError(username, local_host, failure_msg, result);
+                globus_free(failure_msg);
+            } else {
+                SystemError(username, local_host, "Failed to check global connection semaphore", result);
+            }
+            return result;
+        }
+        // NOTE: We now purposely leak the semaphore.  It will be automatically closed when
+        // the server process finishes this connection.
+    }
+    if ((transfer_limit > 0) || (user_transfer_limit > 0)) {
+        globus_gfs_log_message(GLOBUS_GFS_LOG_INFO, "Proceeding with transfer; user %s has %d active transfers (limit %d); server has %d active transfers (limit %d).\n", username, user_lock_count, user_transfer_limit, global_lock_count, transfer_limit);
+    }
+
+    return result;
+}
+
+int
+dumb_sem_open(const char *fname, int flags, mode_t mode, int value) {
+    int fd = open(fname, flags | O_RDWR, mode);
+    if (-1 == fd) {
+        return fd;
+    }
+    if (-1 == posix_fallocate(fd, 0, value)) {
+        return -1;
+    }
+    fchmod(fd, mode);
+    return fd;
+}
+int
+dumb_sem_timedwait(int fd, int value, int secs) {
+    struct timespec start, now, sleeptime;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    sleeptime.tv_sec = 0;
+    sleeptime.tv_nsec = 500*1e6;
+    while (1) {
+        int idx = 0;
+        int lock_count = 0;
+        int need_lock = 1;
+        for (idx=0; idx<value; idx++) {
+            struct flock mylock; memset(&mylock, '\0', sizeof(mylock));
+            mylock.l_type = F_WRLCK;
+            mylock.l_whence = SEEK_SET;
+            mylock.l_start = idx;
+            mylock.l_len = 1;
+            if (0 == fcntl(fd, need_lock ? F_SETLK : F_GETLK, &mylock)) {
+                if (need_lock) {  // We now have the lock.
+                    need_lock = 0;
+                    lock_count++;
+                } else if (mylock.l_type != F_UNLCK) {  // We're just seeing how many locks are taken.
+                    lock_count++;
+                }
+                continue;
+            }
+            if (errno == EAGAIN || errno == EACCES || errno == EINTR) {
+                lock_count++;
+                continue;
+            }
+            return -1;
+        }
+        if (!need_lock) {  // we were able to take a lock.
+            return lock_count;
+        }
+        nanosleep(&sleeptime, NULL);
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        if (now.tv_sec > start.tv_sec + secs) {
+            errno = ETIMEDOUT;
+            return -1;
+        }
+    }
 }
 
 static void
